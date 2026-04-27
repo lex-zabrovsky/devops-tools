@@ -1,0 +1,8 @@
+all:
+  hosts:
+controlplane:
+  host:
+    {{ k8s-controlplane-hostname }}:
+      ansible_host: {{ k8s-controlplane-ip }}
+      ansible_user: rke
+      ansible_ssh_private_key_file: {{ k8s-priv-key-path }}

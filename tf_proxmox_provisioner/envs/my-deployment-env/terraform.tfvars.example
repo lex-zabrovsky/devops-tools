@@ -1,0 +1,96 @@
+# VM configurations
+vms = {
+  controlplane-1 = {
+    hostname  = "controlplane-1"
+    vm_id     = 1001
+    cpu       = 3
+    ram       = 8192
+    k8s_roles = ["controlplane"]
+
+    # set your iface names here
+    networks = [
+      {
+        bridge  = "vmbr0"
+        ip      = "192.168.0.3"
+        gateway = "192.168.0.1"
+      },
+      # mgmt network
+      {
+        bridge  = "vmbr1"
+        ip      = "10.10.0.2"
+        gateway = "10.10.0.1"
+      },
+    ]
+    # set your storage device names here
+    disks = [
+      { size = 100, storage = "local-lvm" },
+      { size = 300, storage = "storage" },
+    ]
+  }
+
+  workload-1 = {
+    hostname  = "workload-1"
+    vm_id     = 1002
+    cpu       = 4
+    ram       = 8192
+    k8s_roles = ["worker"]
+
+    networks = [
+      {
+        bridge  = "vmbr1"
+        ip      = "10.10.0.3"
+        gateway = "10.10.0.1"
+      },
+    ]
+    disks = [
+      { size = 50, storage = "local-lvm" },
+      { size = 80, storage = "storage" },
+    ]
+  }
+
+  workload-2 = {
+    hostname  = "workload-2"
+    vm_id     = 1003
+    cpu       = 4
+    ram       = 8192
+    k8s_roles = ["worker"]
+
+    networks = [
+      {
+        bridge  = "vmbr1"
+        ip      = "10.10.0.4"
+        gateway = "10.10.0.1"
+      },
+    ]
+    disks = [
+      { size = 50, storage = "local-lvm" },
+    ]
+  }
+
+  storage-vm = {
+    hostname = "storage-vm"
+    vm_id     = 1014
+    cpu      = 6
+    ram      = 65536
+
+    networks = [
+      {
+        bridge  = "vmbr1"
+        ip      = "10.10.0.5"
+        gateway = "10.10.0.1"
+      },
+    ]
+    disks = [
+      { size = 200, storage = "local-lvm" },
+      { size = 4000, storage = "storage" },
+      { size = 100, storage = "storage" },
+      { size = 100, storage = "storage" },
+      { size = 500, storage = "storage" },
+      { size = 500, storage = "storage" },
+      { size = 500, storage = "storage" },
+      { size = 500, storage = "storage" },
+      { size = 500, storage = "storage" },
+      { size = 1500, storage = "storage" },
+    ]
+  }
+}

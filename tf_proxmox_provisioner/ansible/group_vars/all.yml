@@ -1,0 +1,19 @@
+---
+rke_version: "v1.8.10"
+kubectl_version: "v1.24.9"
+rancher_version: "v2.7.1"
+cert_manager_version: "v1.12.17"
+helm_version: "4"
+
+local_rke_binary_path: "/home/rke/ansible/tar/rke"
+remote_rke_binary_path: "/usr/local/bin/rke"
+local_kubectl_binary_path: "/home/rke/ansible/tar/kubectl"
+remote_kubectl_binary_path: "/usr/local/bin/kubectl"
+local_helm_binary_path: "/home/rke/ansible/tar/helm"
+remote_helm_binary_path: "/usr/local/bin/helm"
+kube_config_path: "/home/rke/kube_config_cluster.yml"
+local_cluster_yml_path: "/home/rke/ansible/cluster.yml"
+remote_cluster_yml_path: "/home/rke/cluster.yml"
+
+use_private_registry: false
+registry_url: "<private.registry.ip>:5000"

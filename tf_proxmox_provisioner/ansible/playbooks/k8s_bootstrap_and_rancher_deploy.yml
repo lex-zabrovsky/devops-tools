@@ -1,0 +1,215 @@
+# 
+---
+- name: Copy Terraform generated RKE's cluster.yml configuration to controlplane node
+  hosts: controlplane
+  gather_facts: true
+  tasks:
+    - name: Ensure .ssh directory exists
+      file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        mode: '0700'
+
+    - name: Copy RKE's cluster.yml from local Terraform output to controlplane node
+      copy:
+        src: "{{ local_cluster_yml_path }}"
+        dest: "{{ remote_cluster_yml_path }}"
+        mode: '0644'
+      register: copy_result
+
+    - name: Display operation status
+      debug:
+        msg: "cluster.yml copied to {{ remote_cluster_yml_path }}"
+
+
+- name: Install RKE CLI on controlplane node
+  hosts: controlplane
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Copy RKE CLI binary to rke_binary_path
+      copy:
+        src: "{{ local_rke_binary_path }}"
+        dest: "{{ remote_rke_binary_path }}"
+        mode: '0755'
+      register: copy_result
+
+    - name: Verify RKE CLI installation
+      command: "{{ remote_rke_binary_path }} --version"
+      register: rke_version_output
+
+    - name: Display RKE version
+      debug:
+        var: rke_version_output.stdout
+
+
+- name: Install kubectl CLI on controlplane node
+  hosts: controlplane
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Install kubectl CLI tool
+      copy:
+        src: "{{ local_kubectl_binary_path }}"
+        dest: "{{ remote_kubectl_binary_path }}"
+        mode: '0755'
+      register: copy_result
+
+    - name: Verify kubectl CLI tool installation
+      command: kubectl version --client
+      register: kubectl_version_output
+
+    - name: Display kubeclt CLI tool version
+      debug:
+        var: kubectl_version_output.stdout
+
+    - name: Add kubectl completion to bashrc
+      lineinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        line: 'source <(kubectl completion bash)'
+        create: true
+        state: present
+
+
+- name: Bootstrap K8s cluster using cluster.yml cluster configuration
+  hosts: controlplane
+  gather_facts: false
+  tasks:
+    - name: Verify cluster.yml exists
+      stat:
+        path: "{{ remote_cluster_yml_path }}"
+      register: cluster_yml_stat
+
+    - name: Fail if cluster.yml not found
+      fail:
+        msg: "cluster.yml not found at {{ remote_cluster_yml_path }}"
+      when: not cluster_yml_stat.stat.exists
+
+    - name: Run rke to bootstrap K8s cluster
+      command: "rke up -- config {{ remote_cluster_yml_path }}"
+      register: rke_up_output
+      environment:
+        PATH: "/usr/local/bin:{{ ansible_env.PATH }}"
+
+    - name: Display rke up command output
+      debug:
+        var: rke_up_output.stdout_lines
+
+    - name: Check if kubeconfig was created
+      stat:
+        path: "{{ kube_config_path }}"
+      register: kubeconfig_file
+
+    - name: Ensure kubeconfig exists
+      fail:
+        msg: "kubeconfig file not created at {{ kube_config_path }}"
+      when: not kubeconfig_file.stat.exists
+    
+    - name: Display cluster nodes
+      command: "kubectl --kubeconfig {{ kube_config_path }} get nodes"
+      register: kubectl_nodes
+      ignore_errors: true
+    
+    - name: Show cluster nodes
+      debug:
+        var: kubectl_nodes.stdout_lines
+      when: kubectl_nodes.stdout is defined
+
+
+- name: Install Rancher Manager GUI
+  hosts: controlplane
+  become: true
+  gather_facts: true
+  vars:
+    kubeconfig_path: "{{ kube_config_path }}"
+
+  tasks:
+    - name: Install Helm
+      copy:
+        src: "{{ local_helm_binary_path }}"
+        dest: "{{ remote_helm_binary_path }}"
+        mode: '0755'
+      register: copy_result
+    
+    - name: Verify Helm installation
+      command: helm version
+      register: helm_version
+    
+    - name: Display Helm version
+      debug:
+        var: helm_version.stdout
+    
+    # TODO: Make certmanager install air-gapped
+    - name: Add Helm repositories
+      command: "{{ item }}"
+      loop:
+        - helm repo add jetstack https://charts.jetstack.io
+        - helm repo update
+    
+    - name: Download cert-manager CRDs
+      get_url:
+        url: "https://github.com/cert-manager/cert-manager/releases/download/{{ cert_manager_version }}/cert-manager.crds.yaml"
+        dest: "/tmp/cert-manager.crds.yaml"
+    
+    - name: Apply cert-manager CRDs
+      command: "kubectl --kubeconfig {{ kubeconfig_path }} apply -f /tmp/cert-manager.crds.yaml"
+      register: crd_apply
+    
+    - name: Install cert-manager
+      command: |
+        helm install cert-manager jetstack/cert-manager \
+          --version {{ cert_manager_version }} \
+          --namespace cert-manager \
+          --create-namespace \
+          --kubeconfig {{ kubeconfig_path }}
+      register: cert_manager_install
+    
+    - name: Wait for cert-manager pods
+      command: "kubectl --kubeconfig {{ kubeconfig_path }} wait --for=condition=ready pod -l app=cert-manager -n cert-manager --timeout=300s"
+      ignore_errors: true
+    
+    - name: Add Rancher Helm repository
+      command: "{{ item }}"
+      loop:
+        - helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+        - helm repo update
+    
+    - name: Install Rancher Manager
+      command: |
+        helm install rancher rancher-stable/rancher \
+          --namespace cattle-system \
+          --version {{ rancher_version }} \
+          --set bootstrapPassword={{ rancher_bootstrap_password }} \
+          --set hostname={{ rancher_hostname }} \
+          --set webhook.enabled=false \
+          --create-namespace \
+          --kubeconfig {{ kubeconfig_path }}
+      register: rancher_install
+    
+    - name: Display Rancher installation output
+      debug:
+        var: rancher_install.stdout
+    
+    - name: Wait for Rancher deployment
+      command: "kubectl --kubeconfig {{ kubeconfig_path }} wait --for=condition=available deployment rancher -n cattle-system --timeout=300s"
+      ignore_errors: true
+    
+    - name: Get Rancher pods status
+      command: "kubectl --kubeconfig {{ kubeconfig_path }} get pods -n cattle-system"
+      register: rancher_pods
+    
+    - name: Display Rancher pods
+      debug:
+        var: rancher_pods.stdout_lines
+    
+    - name: Get Rancher service
+      command: "kubectl --kubeconfig {{ kubeconfig_path }} get svc -n cattle-system"
+      register: rancher_services
+    
+    - name: Display Rancher services
+      debug:
+        var: rancher_services.stdout_lines
+    
+    - name: Display Rancher access URL
+      debug:
+        msg: "Rancher is available at https://{{ rancher_hostname }}"

@@ -1,0 +1,38 @@
+# Auto-generated RKE cluster configuration from Terraform
+# DO NOT EDIT MANUALLY - This file is managed by Terraform
+
+kubernetes_version: "v1.24.9-rancher1-1"
+
+nodes:
+- address: "10.10.0.2"
+  role: ["controlplane","etcd"]
+  user: "rke"
+  ssh_key_path: "/home/rke/.ssh/rke_key"
+  hostname_override: controlplane-1
+- address: "10.10.0.3"
+  role: ["worker"]
+  user: "rke"
+  ssh_key_path: "/home/rke/.ssh/rke_key"
+  hostname_override: workerload-1
+- address: "10.10.0.4"
+  role: ["worker"]
+  user: "rke"
+  ssh_key_path: "/home/rke/.ssh/rke_key"
+  hostname_override: workerload-2
+
+services:
+  kube-api:
+    service_cluster_ip_range: 10.43.0.0/16
+  kube-controller:
+    cluster_cidr: 10.42.0.0/16
+    service_cluster_ip_range: 10.43.0.0/16
+  kubelet:
+    fail_swap_on: false
+
+private_registries:
+  - url: private.registry:5000
+    user: <username>
+    password: <userpass>
+    is_default: true
+
+ssh_key_path: "/home/rke/.ssh/rke_key"

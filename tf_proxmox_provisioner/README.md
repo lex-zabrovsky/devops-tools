@@ -54,3 +54,4 @@ Edit `envs/env_name/terraform.tfvars` to setup the desired configuration. See
 1. Refactor hardcoded netmask in `./modules/mv/main.tf:49`.
 2. Support `--cpu host, --agent 1` qm options upon VM instantiation. Make them
 configurable via `./envs/env-name/terraform.tfvars`.
+3. Parametrize username and accesskey for cloudinit.
